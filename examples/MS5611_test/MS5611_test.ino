@@ -1,10 +1,10 @@
 //
-//    FILE: MS5611.ino
-//  AUTHOR: Rob Tillaart
-// VERSION: 0.1.02 (modified for SPI version)
+//    FILE: MS5611_test.ino
+//  AUTHOR: Rob Tillaart, modified by Roy van der Kraan
+// VERSION: 0.1.02a (modified for SPI version)
 // PURPOSE: demo application
-//    DATE: 2014-okt-16
-//     URL:
+//    DATE: 2019-01-14
+//     URL: https://github.com/Troynica/MS5611
 //
 // Released to the public domain
 //
