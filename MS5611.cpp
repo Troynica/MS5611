@@ -2,11 +2,14 @@
 //    FILE: MS5611.cpp
 //  AUTHOR: Rob Tillaart
 //          Erni - testing/fixes
-// VERSION: 0.1.8
-// PURPOSE: MS5611 Temperature & Humidity library for Arduino
+// VERSION: 0.1.8a
+// PURPOSE: MS5611 Temperature & Atmospheric Pressure library for Arduino
 //     URL:
 //
-// HISTORY:
+// POST FORK HISTOTY
+// 0.1.8a 2019-01-11 Modified for SPI
+//
+// PRE-FORK HISTORY:
 // 0.1.8  fix #109 incorrect constants (thanks to flauth)
 // 0.1.7  revert double to float (issue 33)
 // 0.1.6  2015-07-12 refactor
@@ -34,88 +37,132 @@
 
 #include "MS5611.h"
 
-#include <Wire.h>
+#include <SPI.h>
 
 /////////////////////////////////////////////////////
 //
 // PUBLIC
 //
-MS5611::MS5611(uint8_t deviceAddress)
+MS5611::MS5611(uint8_t CSn)
 {
-  _address = deviceAddress;
-  Wire.begin();
+  _cspin = CSn;
+  pinMode(_cspin, OUTPUT);
+  digitalWrite(_cspin, HIGH);
+  //SPI.begin();
   _temperature = -999;
   _pressure = -999;
-  _result = -999;
-  init();
+  //init();
 }
 
 void MS5611::init()
 {
   reset();
 
+  // Default values (C1 t/m C86 taken from example column in datasheet to test calculations):
   C[0] = 1;
-  C[1] = 32768L;
-  C[2] = 65536L;
-  C[3] = 3.90625E-3;
-  C[4] = 7.8125E-3;
-  C[5] = 256;
-  C[6] = 1.1920928955E-7;
-  for (uint8_t reg = 0; reg < 7; reg++)
+  C[1] = 40127;
+  C[2] = 36924;
+  C[3] = 23317;
+  C[4] = 23282;
+  C[5] = 33464;
+  C[6] = 28312;
+  C[7] = 0xF0F0;
+ 
+  SPISettings settingsA(1000000, MSBFIRST, SPI_MODE0);  // define SPI settings; limit SPI communication to 1MHz
+  SPI.beginTransaction(settingsA);                      // start SPI transaction
+  for (uint8_t reg = 0; reg < 8; reg++)
   {
-    // C[0] not used; this way indices match datasheet.
-    // C[7] == CRC skipped.
-    C[reg] *= readProm(reg);
+    C[reg] = readProm(reg);
   }
+  SPI.endTransaction();                                 // end SPI transaction
 }
 
 int MS5611::read(uint8_t bits)
 {
-  // VARIABLES NAMES BASED ON DATASHEET
+  // VARIABLES NAMES BASED ON DATASHEET  <- Nice!
   convert(0x40, bits);
-  if (_result) return _result;
   uint32_t D1 = readADC();
-  if (_result) return _result;
 
   convert(0x50, bits);
-  if (_result) return _result;
   uint32_t D2 = readADC();
-  if (_result) return _result;
 
   // TODO the multiplications of these constants can be done in init()
   // but first they need to be verified.
 
   // TEMP & PRESS MATH - PAGE 7/20
-  float dT = D2 - C[5];
-  _temperature = 2000 + dT * C[6];
+  //  - avoiding float type to make running on Tiny's not-impossible
+  //  - running into issues with uint64_t so using uint32_t with adjustments
+  //      (at the cost of reduced resolution for temperature).
+  uint32_t Tref, dT, D2_;
+  uint32_t dTC6;
+  int32_t  TEMP;
+  Tref = C[5];
+  Tref = Tref << 3;           // not multiplying by 2^8: keep   16 bits
+  D2_  = D2 >> 5 ;            // dividing by 2^8       :  24 -> 16 bits
 
-  float offset =  C[2] + dT * C[4];
-  float sens = C[1] + dT * C[3];
+  if (D2_ < Tref ) {          // to avoid signed int so we can bit-shift for divisioning
+    dT   = Tref - D2_;        // 1/256th ; less resolution but  16 bits
+    dTC6 = dT * C[6];         // 16 x 16 bits                   32 bits
+    dTC6 = dTC6 >> 18;        // divide by 2^15 instead of 2^23
+    TEMP = 2000 - dTC6;
+  } else {                    // same for D2 >= Tref ...
+    dT   = D2_ - Tref;
+    dTC6 = dT * C[6];
+    dTC6 = dTC6 >> 18;  
+    TEMP = 2000 + dTC6;
+  }
+//
+//  // OFF = offT1 + TCO * dT = C2 * 2^16 + (C4 * dT ) / 2^7
+//  uint64_t offT1  =  (uint64_t)C[2] << 16; // multiply by 2^16
+//  int64_t  TCOdT  =  C[4] * dT;
+//           TCOdT  = TCOdT / 128; // not sure if I can bit-shift signed integers for division
+//                                 //  otherwise I would do: TCOdT = TCOdT >> 7
+//  int64_t  OFF    =  offT1 + TCOdT;
+//
+//  // SENSE = sensT1 + TCS * dT = C1 * 2^15 + (C3 * dT ) / 2^8
+//  uint64_t sensT1 = (uint64_t)C[1] << 15; // multiply by 2^15
+//  int64_t  TCSdT  = C[3] * dT;
+//           TCSdT  = TCSdT / 256; // not sure if I can bit-shift signed integers for division
+//                                 //  otherwise I would do: TCSdT = TCSdT >> 8
+//  int64_t  SENS   = sensT1 + TCSdT;
+
+  _temperature = TEMP; 
 
   // SECOND ORDER COMPENSATION - PAGE 8/20
   // COMMENT OUT < 2000 CORRECTION IF NOT NEEDED
   // NOTE TEMPERATURE IS IN 0.01 C
-  if (_temperature < 2000)
-  {
-    float T2 = dT * dT * 4.6566128731E-10;
-    float t = _temperature - 2000;
-    float offset2 = 2.5 * t * t;
-    float sens2 = 1.25 * t * t * t;
-    // COMMENT OUT < -1500 CORRECTION IF NOT NEEDED
-    if (_temperature < -1500)
-    {
-      t = _temperature + 1500;
-      t = t * t;
-      offset2 += 7 * t;
-      sens2 += 5.5 * t;
-    }
-    _temperature -= T2;
-    offset -= offset2;
-    sens -= sens2;
-  }
+//  uint64_t T2    = 0;
+//  uint64_t OFF2  = 0;
+//  uint64_t SENS2 = 0;
+//  if (TEMP < 2000)
+//  {
+//    uint64_t tSQ;
+//    T2    = dT * dT;
+//    T2    = dT >> 31;
+//    tSQ   = TEMP - 2000;
+//    tSQ   = tSQ * tSQ;
+//    OFF2  = 5 * tSQ;
+//    OFF2  = OFF2 >> 1;
+//    SENS2 = 5 * tSQ;
+//    SENS2 = SENS2 >> 2;
+//    // COMMENT OUT < -1500 CORRECTION IF NOT NEEDED
+//    if (TEMP < -1500)
+//    {
+//      tSQ   = TEMP + 1500;
+//      tSQ   = tSQ * tSQ;
+//      OFF2 += 7 * tSQ;
+//      tSQ   = tSQ >> 1;
+//      OFF2 += 11 * tSQ;
+//    }
+//  }
+//  _temperature -= T2;
+//  OFF  -= OFF2;
+//  SENS -= SENS2;
   // END SECOND ORDER COMPENSATION
 
-  _pressure = (D1 * sens * 4.76837158205E-7 - offset) * 3.051757813E-5;
+
+  //_pressure = (D1 * sens * 4.76837158205E-7 - offset) * 3.051757813E-5;
+  _pressure = C[6];
 
   return 0;
 }
@@ -127,62 +174,59 @@ int MS5611::read(uint8_t bits)
 //
 void MS5611::reset()
 {
-  command(0x1E);
-  delay(3);
+  SPISettings settingsA(1000000, MSBFIRST, SPI_MODE0);  // define SPI settings; limit SPI communication to 1MHz
+  SPI.beginTransaction(settingsA);                      // start SPI transaction
+  digitalWrite(_cspin, LOW);                            // pull CS line low
+  SPI.transfer(0x1E);                                   // send reset command
+  delay(4);
+  digitalWrite(_cspin,HIGH);                            // pull CS line high
+  SPI.endTransaction();                                 // end SPI transaction
 }
 
 void MS5611::convert(const uint8_t addr, uint8_t bits)
 {
-  uint8_t del[5] = {1, 2, 3, 5, 10};
-
+  uint8_t del[5] = {1, 2, 3, 5, 10};                    // array of MS5611 conversion time (in ms)
   bits = constrain(bits, 8, 12);
   uint8_t offset = (bits - 8) * 2;
-  command(addr + offset);
-  delay(del[offset/2]);
+  SPISettings settingsA(1000000, MSBFIRST, SPI_MODE0);  // define SPI settings; limit SPI communication to 1MHz
+  SPI.beginTransaction(settingsA);                      // start SPI transaction
+  digitalWrite(_cspin, LOW);                            // pull CS line low
+  SPI.transfer(addr + offset);                          // send command
+  delay(del[offset/2]);                                 // MS5611 needs some time for conversion; wait for this...
+  digitalWrite(_cspin,HIGH);                            // pull CS line high
+  SPI.endTransaction();                                 // end SPI transaction
 }
 
-uint16_t MS5611::readProm(uint8_t reg)
-{
-  reg = min(reg, 7);      // constrain(reg, 0, 7) but reg is an uint so...
+uint16_t MS5611::readProm(uint8_t reg) {
+  // read two bytes from SPI and eventually return accumulated value
+  reg = min(reg, 7);
   uint8_t offset = reg * 2;
-  command(0xA0 + offset);
-  if (_result == 0)
-  {
-    int nr = Wire.requestFrom(_address, (uint8_t)2);
-    if (nr >= 2)
-    {
-      uint16_t val = Wire.read() * 256;
-      val += Wire.read();
-      return val;
-    }
-    return 0;
-  }
-  return 0;
+  uint16_t val = 0;
+  digitalWrite(_cspin, LOW);                            // pull CS line low
+  SPI.transfer(0xA0 + offset);                          // send command
+  val  = SPI.transfer(0x00);                            // read 8 bits of data (MSB)
+  val  = val << 8;                                      // shift left 8 bits
+  val |= SPI.transfer(0x00);                            // read 8 bits of data (LSB)
+  digitalWrite(_cspin,HIGH);                            // pull CS line high
+  return val;
 }
 
-uint32_t MS5611::readADC()
-{
-  command(0x00);
-  if (_result == 0)
-  {
-    int nr = Wire.requestFrom(_address, (uint8_t)3);
-    if (nr >= 3)
-    {
-      uint32_t val = Wire.read() * 65536UL;
-      val += Wire.read() * 256UL;
-      val += Wire.read();
-      return val;
-    }
-    return 0UL;
-  }
-  return 0UL;
-}
-
-void MS5611::command(const uint8_t command)
-{
-  Wire.beginTransmission(_address);
-  Wire.write(command);
-  _result = Wire.endTransmission();
+uint32_t MS5611::readADC() {
+  // read two bytes from SPI and eventually return accumulated value
+  uint8_t  v;
+  uint32_t val = 0;
+  SPISettings settingsA(1000000, MSBFIRST, SPI_MODE0);  // define SPI settings; limit SPI communication to 1MHz
+  SPI.beginTransaction(settingsA);                      // start SPI transaction
+  digitalWrite(_cspin, LOW);                            // pull CS line low
+  SPI.transfer(0x00);                                   // send command
+  val  = SPI.transfer(0x00);                            // read 8 bits of data (MSB)
+  val  = val << 8;                                      // shift left 8 bits
+  val |= SPI.transfer(0x00);                            // read 8 bits of data
+  val  = val << 8;                                      // shift left 8 bits
+  val |= SPI.transfer(0x00);                            // read 8 bits of data (LSB)
+  digitalWrite(_cspin,HIGH);                            // pull CS line high
+  SPI.endTransaction();                                 // end SPI transaction
+  return val;
 }
 
 // END OF FILE

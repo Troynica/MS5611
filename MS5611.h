@@ -2,7 +2,7 @@
 //    FILE: MS5611.h
 //  AUTHOR: Rob Tillaart
 //          Erni - testing/fixes
-// VERSION: 0.1.8
+// VERSION: 0.1.8a
 // PURPOSE: MS5611 Temperature & Pressure library for Arduino
 //     URL:
 //
@@ -19,20 +19,21 @@
 #include <Arduino.h>
 #endif
 
-#define MS5611_LIB_VERSION (F("0.1.8"))
+#define MS5611_LIB_VERSION (F("0.1.8a"))
 
 #define MS5611_READ_OK  0
 
 class MS5611
 {
 public:
-  explicit MS5611(uint8_t deviceAddress);
+  explicit        MS5611(uint8_t CSpin);
 
-  void           init();
-  int            read(uint8_t bits = 8);
-  inline int32_t getTemperature() const { return _temperature; };
-  inline int32_t getPressure() const { return _pressure; };
-  inline int     getLastResult() const { return _result; };
+  void            init();
+  int             read(uint8_t bits = 8);
+  inline int32_t  getTemperature() const { return _temperature; };
+  inline int32_t  getPressure() const { return _pressure; };
+  inline int      getLastResult() const { return _result; };
+  inline uint16_t getPromValue(int p) const { return C[p]; };
 
 private:
   void     reset();
@@ -41,11 +42,11 @@ private:
   uint16_t readProm(uint8_t reg);
   void     command(const uint8_t command);
 
-  uint8_t  _address;
+  uint8_t  _cspin;
   int32_t  _temperature;
   int32_t  _pressure;
   int      _result;
-  float    C[7];
+  uint16_t C[7];
 };
 #endif
 
