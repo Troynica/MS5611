@@ -17,6 +17,7 @@ read	KEYWORD2
 getTemperature	KEYWORD2
 getPressure	KEYWORD2
 getLastResult	KEYWORD2
+getPromValue	KEYWORD2
 
 
 #######################################
