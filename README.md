@@ -1,6 +1,9 @@
 # MS5611
 MS5611 - barometric pressure sensor library for Arduino (SPI version)
 
+Please note: only temperature reading implemented yet.
+
+
 Rewrite of Rob Tillaart's work of the library.
 - Modified for SPI instead of I2C
 - Using only integers (for MCU's that don't do floating point operations)
