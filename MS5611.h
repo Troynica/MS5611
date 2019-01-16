@@ -3,7 +3,7 @@
 //  AUTHOR: Rob Tillaart
 //          Erni - testing/fixes
 // VERSION: 0.1.8a
-// PURPOSE: MS5611 Temperature & Pressure library for Arduino
+// PURPOSE: MS5611 Temperature & Atmospheric Pressure library for Arduino
 //     URL:
 //
 // HISTORY:
@@ -30,10 +30,10 @@ public:
 
   void            init();
   int             read(uint8_t bits = 8);
-  inline int32_t  getTemperature() const { return _temperature; };
-  inline int32_t  getPressure() const { return _pressure; };
-  inline int      getLastResult() const { return _result; };
-  inline uint16_t getPromValue(int p) const { return C[p]; };
+  inline int32_t  getTemperature()        const { return _temperature; };
+  inline uint32_t getPressure()           const { return _pressure; };
+  inline int      getLastResult()         const { return _result; };
+  inline uint16_t getPromValue(uint8_t p) const { return C[p]; };
 
 private:
   void     reset();
@@ -44,9 +44,9 @@ private:
 
   uint8_t  _cspin;
   int32_t  _temperature;
-  int32_t  _pressure;
+  uint32_t _pressure;
   int      _result;
-  uint16_t C[7];
+  uint16_t C[8];
 };
 #endif
 
