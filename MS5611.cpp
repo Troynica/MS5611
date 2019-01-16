@@ -88,7 +88,7 @@ int MS5611::read(uint8_t bits)
   // TODO the multiplications of these constants can be done in init()
   // but first they need to be verified.
 
-  // TEMP & PRESS MATH - PAGE 7/20
+  // TEMP & PRESS MATH - PAGE 7/20 of the datasheet
   //  - avoiding float type to make running on Tiny's not-impossible
   //  - running into issues with uint64_t so using uint32_t with adjustments
   //      (at the cost of reduced resolution for temperature).
@@ -126,6 +126,39 @@ int MS5611::read(uint8_t bits)
     SENS   = sensT1 + TCSdT;
   }
 
+
+  // SECOND ORDER COMPENSATION - PAGE 8/20 of the datasheet
+  // COMMENT OUT < 2000 CORRECTION IF NOT NEEDED
+  // NOTE TEMPERATURE IS IN 0.01 C
+  uint32_t T2    = 0;
+  uint32_t OFF2  = 0;
+  uint32_t SENS2 = 0;
+  if (TEMP < 2000)
+  {
+    uint64_t tSQ;
+    T2     = ((uint64_t)dT * (uint64_t)dT) >> 31;
+    tSQ    = (int32_t)TEMP - 2000L;
+    tSQ   *= tSQ;
+    OFF2   = (5ULL * (uint64_t)tSQ) >> 1;
+    SENS2  = (5ULL * (uint64_t)tSQ) >> 2;
+    // COMMENT OUT < -1500 CORRECTION IF NOT NEEDED
+    if (TEMP < -1500)
+    {
+      tSQ    = (int32_t)TEMP - 2000L;
+      tSQ   *= tSQ;
+      OFF2  +=   7ULL * (uint64_t)tSQ;
+      SENS2 += (11ULL * (uint64_t)tSQ) >> 1;
+    }
+  }
+
+  TEMP -= T2;
+  OFF  -= OFF2;
+  SENS -= SENS2;
+  //
+  // END SECOND ORDER COMPENSATION
+  //
+
+
   int64_t P  = (int64_t)D1 * SENS;
   P /= 2097152LL;
   P -= OFF;
@@ -133,41 +166,6 @@ int MS5611::read(uint8_t bits)
 
   _temperature = TEMP; 
   _pressure = (uint32_t)P; 
-
-  // SECOND ORDER COMPENSATION - PAGE 8/20
-  // COMMENT OUT < 2000 CORRECTION IF NOT NEEDED
-  // NOTE TEMPERATURE IS IN 0.01 C
-//  uint64_t T2    = 0;
-//  uint64_t OFF2  = 0;
-//  uint64_t SENS2 = 0;
-//  if (TEMP < 2000)
-//  {
-//    uint64_t tSQ;
-//    T2    = dT * dT;
-//    T2    = dT >> 31;
-//    tSQ   = TEMP - 2000;
-//    tSQ   = tSQ * tSQ;
-//    OFF2  = 5 * tSQ;
-//    OFF2  = OFF2 >> 1;
-//    SENS2 = 5 * tSQ;
-//    SENS2 = SENS2 >> 2;
-//    // COMMENT OUT < -1500 CORRECTION IF NOT NEEDED
-//    if (TEMP < -1500)
-//    {
-//      tSQ   = TEMP + 1500;
-//      tSQ   = tSQ * tSQ;
-//      OFF2 += 7 * tSQ;
-//      tSQ   = tSQ >> 1;
-//      OFF2 += 11 * tSQ;
-//    }
-//  }
-//  _temperature -= T2;
-//  OFF  -= OFF2;
-//  SENS -= SENS2;
-  // END SECOND ORDER COMPENSATION
-
-
-  //_pressure = (D1 * sens * 4.76837158205E-7 - offset) * 3.051757813E-5;
 
   return 0;
 }
@@ -201,7 +199,7 @@ void MS5611::convert(const uint8_t addr, uint8_t bits)
 }
 
 uint16_t MS5611::readProm(uint8_t reg) {
-  // read two bytes from SPI and eventually return accumulated value
+  // read two bytes from SPI and return accumulated value
   reg = min(reg, 7);
   uint8_t offset = reg * 2;
   uint16_t val = 0;
@@ -214,7 +212,7 @@ uint16_t MS5611::readProm(uint8_t reg) {
 }
 
 uint32_t MS5611::readADC() {
-  // read three bytes from SPI and eventually return accumulated value
+  // read three bytes from SPI and return accumulated value
   uint32_t val = 0UL;
   SPI.beginTransaction(settingsA);                      // start SPI transaction
   digitalWrite(_cspin, LOW);                            // pull CS line low
