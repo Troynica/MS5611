@@ -2,12 +2,14 @@
 //    FILE: MS5611.cpp
 //  AUTHOR: Rob Tillaart
 //          Erni - testing/fixes
-// VERSION: 0.1.8a
+//          Roy van der Kraan - partial rewrite (mainly for SPI use)
+// VERSION: 0.1.9
 // PURPOSE: MS5611 Temperature & Atmospheric Pressure library for Arduino
 //     URL:
 //
 // POST FORK HISTOTY
-// 0.1.8a 2019-01-11 Modified for SPI
+// 0.1.9  2019-01-17 modified for SPI
+//                   replaced all floating point with integer arithmatic
 //
 // PRE-FORK HISTORY:
 // 0.1.8  fix #109 incorrect constants (thanks to flauth)
@@ -68,12 +70,13 @@ void MS5611::init()
   C[6] = 28312;
   C[7] = 0xF0F0;
  
-  SPI.beginTransaction(settingsA);                      // start SPI transaction
+  // Read all factory parameters C0 to C7 from PROM
+  SPI.beginTransaction(settingsA);
   for (uint8_t reg = 0; reg < 8; reg++)
   {
     C[reg] = readProm(reg);
   }
-  SPI.endTransaction();                                 // end SPI transaction
+  SPI.endTransaction();
 }
 
 int MS5611::read(uint8_t bits)
