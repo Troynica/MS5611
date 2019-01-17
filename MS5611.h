@@ -2,7 +2,7 @@
 //    FILE: MS5611.h
 //  AUTHOR: Rob Tillaart
 //          Erni - testing/fixes
-// VERSION: 0.1.8a
+// VERSION: 0.1.9
 // PURPOSE: MS5611 Temperature & Atmospheric Pressure library for Arduino
 //     URL:
 //
@@ -19,7 +19,7 @@
 #include <Arduino.h>
 #endif
 
-#define MS5611_LIB_VERSION (F("0.1.8a"))
+#define MS5611_LIB_VERSION (F("0.1.9"))
 
 #define MS5611_READ_OK  0
 
