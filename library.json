@@ -6,11 +6,12 @@
   [
     {
       "name": "Roy van der Kraan",
-      "email": "",
+      "url": "https://github.com/Troynica/MS5611",
       "maintainer": true
     },
     {
-      "name": "Rob Tillaart"
+      "name": "Rob Tillaart",
+      "url": "https://github.com/RobTillaart/Arduino"
     }
   ],
   "repository":
@@ -18,10 +19,7 @@
     "type": "git",
     "url": "https://github.com/Troynica/MS5611.git"
   },
-  "version":"0.1.8a",
+  "version":"0.1.9",
   "frameworks": "arduino",
-  "platforms": "*",
-  "export": {
-    "include": "libraries/MS5611"
-  }
+  "platforms": "*"
 }
