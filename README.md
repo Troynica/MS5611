@@ -8,6 +8,6 @@ Rewrite of Rob Tillaart's work of the library.
 - Added PROM parameter CRC4 check (in exaple sketch)
 
 To do:
-- properly implement second order compensation
+- ~~properly implement second order compensation~~
 - include CRC4 check in library
 - combine SPI and I2C version in one library
