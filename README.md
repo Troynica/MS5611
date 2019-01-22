@@ -1,11 +1,11 @@
 # MS5611
 MS5611 - barometric pressure sensor library for Arduino (SPI version)
 
-*Warning:* the IO pins of the MS5611 are not 5V tolerant. The popular GY-63
+**Warning:** *the IO pins of the MS5611 are not 5V tolerant. The popular GY-63
 break out board has a voltage regulator but it does not provide protection
 from overvoltage on the SPI/I2C pins. The sensor breaks easily when more than
 3.5V is applied to the IO pins. Typical sign of defective sensor is a temperature
-reading of 30+ degrees at room temperature.
+reading of 30+ degrees at room temperature.*
 
 Rewrite of Rob Tillaart's work of the library.
 - Modified for SPI instead of I2C
